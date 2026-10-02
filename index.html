@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kamera Dokumen - Logbook Kesekretariatan</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#111827;color:#fff;font-family:Arial,sans-serif}
+header{padding:16px 20px;background:#1e3a8a}header h1{margin:0;font-size:21px}header p{margin:5px 0 0;opacity:.85;font-size:13px}
+main{max-width:1000px;margin:20px auto;padding:0 16px}.box{background:#1f2937;border-radius:16px;padding:16px}
+.video-wrap{background:#000;border-radius:12px;overflow:hidden}.video-wrap video{display:block;width:100%;max-height:65vh;object-fit:contain}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.btn{border:0;border-radius:9px;padding:11px 16px;font-weight:700;cursor:pointer}.primary{background:#2563eb;color:#fff}.secondary{background:#e5e7eb;color:#111827}.ok{background:#16a34a;color:#fff}.danger{background:#dc2626;color:#fff}
+.status{margin-top:10px;color:#cbd5e1;font-size:13px}.preview{margin-top:16px;background:#111827;border-radius:12px;padding:10px}.preview img{width:100%;max-height:55vh;object-fit:contain;display:block}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<header><h1>📷 Dokumentasi Dokumen</h1><p>Ambil foto menggunakan kamera PC/webcam</p></header>
+<main><div class="box">
+<div class="video-wrap"><video id="video" autoplay playsinline></video></div>
+<div class="actions">
+<button class="btn secondary" id="switch">🔄 Ganti Kamera</button>
+<button class="btn primary" id="take">📸 Ambil Foto</button>
+<button class="btn danger" id="close">Tutup</button>
+</div>
+<div class="status" id="status">Meminta izin kamera...</div>
+<div class="preview hidden" id="preview"><img id="img"><div class="actions"><button class="btn secondary" id="again">Ambil Ulang</button><button class="btn ok" id="use">✓ Gunakan Foto</button></div></div>
+<canvas id="canvas" class="hidden"></canvas>
+</div></main>
+<script>
+let stream=null,devices=[],index=0,lastData='';
+const $=id=>document.getElementById(id);
+
+async function start(deviceId){
+ if(stream)stream.getTracks().forEach(t=>t.stop());
+ const constraints={video:deviceId?{deviceId:{exact:deviceId},width:{ideal:1920},height:{ideal:1080}}:{width:{ideal:1920},height:{ideal:1080}},audio:false};
+ try{
+  stream=await navigator.mediaDevices.getUserMedia(constraints);
+  $('video').srcObject=stream;
+  devices=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+  $('status').textContent=devices.length>1?'Kamera ativa. Você pode trocar de câmera.':'Kamera ativa.';
+ }catch(e){
+  $('status').textContent='Kamera tidak dapat diakses: '+(e.message||e.name);
+ }
+}
+$('take').onclick=()=>{
+ const v=$('video'),c=$('canvas');if(!v.videoWidth){$('status').textContent='Kamera belum siap.';return}
+ c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+ lastData=c.toDataURL('image/jpeg',.9).split(',')[1];
+ $('img').src='data:image/jpeg;base64,'+lastData;$('preview').classList.remove('hidden');$('status').textContent='Foto siap diperiksa.';
+};
+$('again').onclick=()=>{$('preview').classList.add('hidden');$('status').textContent='Kamera aktif.'};
+$('use').onclick=()=>{
+ if(!lastData)return;
+ if(window.opener&&!window.opener.closed){
+   window.opener.postMessage({type:'LOGBOOK_CAMERA_PHOTO',bytes:lastData},'*');
+   $('status').textContent='Foto sudah dikirim ke aplikasi. Jendela ini boleh ditutup.';
+   setTimeout(()=>window.close(),700);
+ }else $('status').textContent='Jendela aplikasi utama tidak ditemukan.';
+};
+$('switch').onclick=async()=>{
+ if(devices.length<2){$('status').textContent='Hanya satu kamera terdeteksi.';return}
+ index=(index+1)%devices.length;await start(devices[index].deviceId)
+};
+$('close').onclick=()=>{if(stream)stream.getTracks().forEach(t=>t.stop());window.close()};
+window.addEventListener('beforeunload',()=>{if(stream)stream.getTracks().forEach(t=>t.stop())});
+if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+ $('status').textContent='Browser tidak mendukung akses kamera. Gunakan Chrome/Edge versi terbaru dan HTTPS.';
+}else start();
+</script>
+</body>
+</html>
